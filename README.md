@@ -25,8 +25,8 @@
 
 | 算子名称                    | 场景     | 描述               | 状态     |
 | ----------------------- | ------ | ---------------- | ------ |
-| `optimized_transducer` | 语音识别 | 对`RNN-T`模型的`loss`算子和`softmax`算子做了融合，显存优化和性能优化 | ✅ 已发布  |
-| `unique_v3` | 数学通用算子  | 对排序算法在AIV上做了优化，增加`index` `counter`输出   | ✅ 已发布 |
+| [`optimized_transducer`](optimized_transducer/README.md) | 语音识别 | 对 `RNN-T` 模型的 `loss` 算子和 `softmax` 算子做了融合，显存优化和性能优化 | ✅ 已发布 |
+| [`unique_v3`](unique_v3/README.md) | 数学通用算子 | 对排序算法在 AIV 上做了优化，增加 `inverse`、`counts` 输出 | ✅ 已发布 |
 
 ---
 
