@@ -29,7 +29,7 @@ static ge::graphStatus InferShapeUniqueV3(gert::InferShapeContext* context)
     if (!y_shape) return GRAPH_FAILED;
     *y_shape = *x1_shape;
 
-    // output[1]: uniqueCnt — scalar, shape = {1}
+    // output[1]: uniqueCnt — one-element tensor, shape = {1}
     gert::Shape* cnt_shape = context->GetOutputShape(1);
     if (!cnt_shape) return GRAPH_FAILED;
     *cnt_shape = gert::Shape({1});

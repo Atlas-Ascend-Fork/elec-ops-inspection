@@ -57,7 +57,7 @@
     <tr>
       <td>uniqueCnt</td>
       <td>输出</td>
-      <td>唯一值的个数，标量。</td>
+      <td>唯一值的个数，INT32 Tensor，shape 为 [1]。</td>
       <td>INT32</td>
       <td>ND</td>
     </tr>
