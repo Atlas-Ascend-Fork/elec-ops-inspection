@@ -13,7 +13,7 @@
 - **内存优化**：将原始 `(N, T, U, V)` 四维广播张量压缩为 `(Σ(t,u), V)` 二维紧凑表示，消除冗余内存分配。
 - **梯度融合**：将 softmax 与梯度计算原地合并，省去中间大张量存储，梯度结果直接原地覆写 logits 输出缓冲区。
 - **多核负载均衡**：Host 侧采用最大任务优先 + 最小负载优先策略，将批次样本均衡分配至多个 AI Core，充分利用 NPU 算力。
-- **对角线并行遍历**：Kernel 侧按反对角线顺序计算 α/β 表，最大化核内数据复用，减少 HBM 访问次数。
+- **当前递推实现**：Kernel 侧按 t 行顺序计算 α，按 t 行逆序计算 β；每行内部按 u 方向串行递推。片上缓存保留相邻两行，完整 α/β 表写入 workspace，供后续梯度计算使用。
 - **当前数据类型**：OpDef 与 Tiling 当前仅接受 float32 logits，loss 与 grad 也以 float32 输出。
 
 ---
@@ -58,11 +58,11 @@
 
 总计约 **12 次以上** HBM 搬运，中间结果全部占据 HBM。
 
-本算子融合后的优化路径：一次读取 logits 到片上 UB，在 UB 内完成 log_softmax、α/β 递推、梯度公式计算全流程，一次写回 loss 与 grad 最终结果，**总计 2 次 HBM 搬运**。
+当前源码在一次 kernel 调用中执行 log_softmax、β/α 递推和梯度计算，但这不等于只读写 HBM 两次：log_prob 与 grad 共用 GM 缓冲区，α/β 完整表使用额外 workspace；各阶段仍通过 DataCopy/DataCopyPad 搬运数据。不能把理论融合路径的两次搬运当成此实现的实测或静态准确计数。
 
 | 优化点 | 传统方案 | 融合算子 |
 |---|---|---|
-| HBM 搬运次数 | 12+ 次 | 2 次 |
+| HBM 搬运路径 | 上述为分步计算的示意路径 | 当前实现多阶段访问 GM；精确次数需结合实际路径与设备分析 |
 | 中间大张量数量 | 3 个（P、∂P/∂h、∂L/∂h） | 0 个（全部原地覆写） |
 | logits 内存布局 | 4D `(B,T,U,V)` 广播展开 | 2D `(Σ(t,u), V)` 紧凑排列 |
 | Kernel 启动次数 | 多次（softmax、forward、backward 分离） | 1 次（全流程融合） |
@@ -72,7 +72,7 @@
 | 优化技术 | 说明 |
 |---|---|
 | 2D 张量压缩 | 每条样本的 logits 按实际有效 (t,u) 位置拼接为 2D，避免 padding 位置的无效计算 |
-| 对角线遍历 α/β | 按反对角线顺序遍历格子，同一对角线上各点依赖关系已满足，可批量并发处理 |
+| 行递推 α/β | α 沿 t 正序、u 正序递推；β 沿 t 逆序、u 逆序递推。使用相邻两行 UB 缓存并将完整表写入 GM workspace |
 | 梯度公式化简 | 将 softmax → P → ∂L/∂h 三步融合为公式 13（见论文），直接计算梯度，省去中间变量 |
 | tile 自适应分块 | 根据词表大小 V 和 UB 容量自动确定 tile 面积 M，充分利用片上缓存 |
 | double buffer | 数据搬运与计算流水并发，隐藏 HBM 访问延迟 |
@@ -87,7 +87,7 @@ $$\frac{\partial L}{\partial h_{t,u}^k} = P(k|t,u) \cdot \frac{\alpha(t,u)}{P(\m
 
 | 特性 | 说明 |
 |---|---|
-| 双 loss 互校验 | 前向计算结束后，由 α 路径和 β 路径分别独立得到 loss，两者必须在阈值内吻合，不一致时报错 |
+| loss 输出与独立验证 | 当前由 β(0,0) 生成 loss；ComputeAlpha 内双路 loss 对比代码处于注释块，没有启用阈值报错。精度须通过独立 CPU/reference 回归验证 |
 | 数值稳定 | 全程在 log 域进行 α/β 递推（log-sum-exp），避免概率连乘下溢 |
 | clamp 保护 | 支持对梯度做 `[-clamp, clamp]` 截断，防止极端梯度破坏训练稳定性 |
 | 可复现性 | 相同输入保证相同输出，满足科研可复现要求 |
@@ -142,12 +142,11 @@ Host 侧（任务调度）
     ▼
 Kernel 侧（AscendC，单核处理单样本）
     │  Init：tile 切分、缓冲区初始化、缓存 targets/blank/clamp
-    │  Process：
+    │  Process（常规 loss+grad 路径）：
     │    1. log_softmax(logits) → log_prob（写入 grad 缓冲区）
-    │    2. 对角线遍历计算 log_α
-    │    3. 反对角线遍历计算 log_β
-    │    4. 双路 loss 互校验
-    │    5. 融合梯度公式计算 ∂L/∂h，原地覆写 grad
+    │    2. 按 t/u 逆序行递推 log_β，并输出 loss
+    │    3. 常规路径按 t/u 正序行递推 log_α
+    │    4. 融合梯度公式计算 ∂L/∂h，原地覆写 grad
     └──────────────────────────────────────────
 ```
 
@@ -156,7 +155,7 @@ Kernel 侧（AscendC，单核处理单样本）
 | Python | pybind 调用入口；当前不包含 autograd 与 reduction 封装 |
 | aclnn | 两段式 C++ 接口，workspace 计算，pybind 导出 |
 | Host | 核间负载均衡（最大任务优先 + 最小负载优先） |
-| Kernel | 对角线遍历 α/β，tile 分块，log_prob / grad 内存复用 |
+| Kernel | 顺序行递推 β/α，tile 分块，log_prob / grad 缓冲区复用；α/β 完整表另占 workspace |
 
 ---
 
@@ -205,8 +204,8 @@ print("grad shape:", grad.shape) # (24, 8)
 | 前反向融合 | 一次 kernel 调用同时输出 loss 和 grad，避免二次遍历 α/β 表 |
 | 内存原地复用 | log_prob 与 grad 共享同一 GM 缓冲区，峰值内存降低约 50% |
 | 2D 紧凑输入 | 按样本拼接 logits，消除 padding 位置的无效 softmax 与梯度计算 |
-| 对角线并行 | 反对角线上各 (t,u) 点依赖已满足，可在同一轮中批量载入 UB 处理 |
-| 双路 loss 校验 | α 路径与 β 路径各自独立推导 loss 并互相比对，确保数值正确性 |
+| 当前行递推 | 相邻两行 α/β 位于 UB；完整表写入 GM workspace，没有实现反对角线批量并行 |
+| 精度验证 | 当前未启用 kernel 内双路 loss 阈值校验，使用独立 CPU/reference 对照验证 |
 | 多核负载均衡 | 按 T×U 面积排序，优先分配大任务到空闲核，减少批次尾部等待 |
 | 梯度截断保护 | clamp > 0 时对每个梯度分量执行 `grad = clamp(grad, -clamp, clamp)` |
 
