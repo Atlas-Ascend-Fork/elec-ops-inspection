@@ -64,14 +64,14 @@
     <tr>
       <td>inverse</td>
       <td>输出（可选）</td>
-      <td>反向索引映射，inverse[i] 表示 input[i] 在 output 中的索引位置，shape 与 input 相同。仅当 flag_inverse=1 时有效。</td>
+      <td>反向索引映射，inverse[i] 表示 input[i] 在 output 中的索引位置，shape 与 input 相同。flag_inverse 非 0 时有效；为 0 时不计算。</td>
       <td>INT32</td>
       <td>ND</td>
     </tr>
     <tr>
       <td>counts</td>
       <td>输出（可选）</td>
-      <td>每个唯一值的出现次数，counts[j] 表示 output[j] 在 input 中出现的次数，前 uniqueCnt 个元素有效。仅当 flag_counts=1 时有效。</td>
+      <td>每个唯一值的出现次数，counts[j] 表示 output[j] 在 input 中出现的次数，前 uniqueCnt 个元素有效。flag_counts 非 0 时有效；为 0 时不计算。</td>
       <td>INT32</td>
       <td>ND</td>
     </tr>
@@ -85,14 +85,14 @@
     <tr>
       <td>flag_inverse</td>
       <td>属性（可选）</td>
-      <td>是否计算反向索引输出 inverse，默认值为 0。</td>
+      <td>是否计算反向索引输出 inverse：0 表示不计算，非 0 表示计算，默认值为 0。</td>
       <td>INT</td>
       <td>-</td>
     </tr>
     <tr>
       <td>flag_counts</td>
       <td>属性（可选）</td>
-      <td>是否计算唯一值计数输出 counts，默认值为 0。</td>
+      <td>是否计算唯一值计数输出 counts：0 表示不计算，非 0 表示计算，默认值为 0。</td>
       <td>INT</td>
       <td>-</td>
     </tr>
