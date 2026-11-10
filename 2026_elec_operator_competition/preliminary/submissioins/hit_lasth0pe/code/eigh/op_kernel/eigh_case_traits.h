@@ -16,6 +16,9 @@
 #pragma once
 #include <cstdint>
 template<uint32_t KEY> struct EighCase;
+template<> struct EighCase<0u> {
+  static constexpr uint32_t N=0u, B=0u, U=0u, P=1u, Solver=4u;
+};
 template<> struct EighCase<1u> {
   static constexpr uint32_t N=16u, B=1u, U=0u, P=1u, Solver=0u;
 };

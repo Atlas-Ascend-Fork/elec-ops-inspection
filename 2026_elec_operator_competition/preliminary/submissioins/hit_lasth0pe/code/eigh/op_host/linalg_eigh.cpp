@@ -28,42 +28,39 @@ struct EighMatrixGeometry {
     uint32_t dimNum = 0U;
     uint32_t batchCount = 0U;
     uint32_t matrixOrder = 0U;
+    uint32_t uplo = 0U;
     bool valid = false;
 };
 
-static EighMatrixGeometry ExtractMatrixGeometry(const gert::Shape &originShape)
+static EighMatrixGeometry ExtractMatrixGeometry(const gert::Shape &originShape, uint32_t uploVal)
 {
     EighMatrixGeometry geom;
     const size_t dims = originShape.GetDimNum();
-    if (dims != 2U && dims != 3U) {
+    if (dims < 2U) {
         return geom;
     }
     const int64_t rows = originShape.GetDim(dims - 2U);
     const int64_t cols = originShape.GetDim(dims - 1U);
-    if (rows <= 0 || rows != cols) {
+    if (rows <= 0 || rows > 512 || rows != cols) {
         return geom;
     }
-    const int64_t batches = (dims == 3U) ? originShape.GetDim(0U) : 1;
-    if (batches <= 0) {
-        return geom;
+    int64_t batches = 1;
+    for (size_t d = 0U; d + 2U < dims; ++d) {
+        const int64_t dimVal = originShape.GetDim(d);
+        if (dimVal <= 0) {
+            return geom;
+        }
+        batches *= dimVal;
     }
     geom.dimNum = static_cast<uint32_t>(dims);
     geom.batchCount = static_cast<uint32_t>(batches);
     geom.matrixOrder = static_cast<uint32_t>(rows);
+    geom.uplo = uploVal;
     geom.valid = true;
     return geom;
 }
 
-template <uint32_t CASE_KEY>
-static bool MatchesCaseGeometry(const EighMatrixGeometry &geom)
-{
-    using C = EighCase<CASE_KEY>;
-    const uint32_t expectedDims = (C::B == 1U) ? 2U : 3U;
-    return geom.valid && (geom.dimNum == expectedDims) &&
-           (geom.batchCount == C::B) && (geom.matrixOrder == C::N);
-}
-
-static bool ValidateInputAndUploAttr(const gert::TilingContext *context)
+static bool ValidateInputAndParseUplo(const gert::TilingContext *context, uint32_t &uploOut)
 {
     const auto *tensor = context->GetRequiredInputTensor(0);
     if (tensor == nullptr || tensor->GetDataType() != ge::DT_FLOAT) {
@@ -77,8 +74,18 @@ static bool ValidateInputAndUploAttr(const gert::TilingContext *context)
             uplo = attrStr;
         }
     }
-    const bool isLower = (uplo[0] == 'L' || uplo[0] == 'l') && (uplo[1] == '\0');
-    return isLower;
+    if (uplo[1] != '\0') {
+        return false;
+    }
+    if (uplo[0] == 'L' || uplo[0] == 'l') {
+        uploOut = 0U;
+        return true;
+    }
+    if (uplo[0] == 'U' || uplo[0] == 'u') {
+        uploOut = 1U;
+        return true;
+    }
+    return false;
 }
 
 static uint32_t QueryAvailableVectorCores(const gert::TilingContext *context)
@@ -89,15 +96,11 @@ static uint32_t QueryAvailableVectorCores(const gert::TilingContext *context)
     return (clampedCores < 32U) ? clampedCores : 32U;
 }
 
-template <uint32_t CASE_KEY>
-static ge::graphStatus ApplyCasePlan(gert::TilingContext *context, uint32_t availableCores)
+static ge::graphStatus CommitTilingPlan(gert::TilingContext *context,
+                                        const LinalgEighTilingData &plan,
+                                        uint32_t caseKey)
 {
-    constexpr auto &plan = EighHostPlan<CASE_KEY>::value;
-    if (plan.used_cores > availableCores) {
-        return ge::GRAPH_FAILED;
-    }
     *context->GetTilingData<LinalgEighTilingData>() = plan;
-    const uint32_t caseKey = CASE_KEY;
     const uint32_t dtCode = static_cast<uint32_t>(ge::DT_FLOAT);
     ASCENDC_TPL_SEL_PARAM(context, dtCode, caseKey);
     context->SetBlockDim(plan.used_cores);
@@ -105,28 +108,67 @@ static ge::graphStatus ApplyCasePlan(gert::TilingContext *context, uint32_t avai
     return ge::GRAPH_SUCCESS;
 }
 
-static ge::graphStatus DispatchCasePlan(gert::TilingContext *context,
+template <uint32_t CASE_KEY>
+static bool MatchesPresetCase(const EighMatrixGeometry &geom, uint32_t availableCores)
+{
+    using C = EighCase<CASE_KEY>;
+    constexpr uint32_t reqCores = C::B * C::P;
+    return (geom.batchCount == C::B) &&
+           (geom.matrixOrder == C::N) && (availableCores >= reqCores);
+}
+
+static ge::graphStatus ApplyGeneralPlan(gert::TilingContext *context,
                                         const EighMatrixGeometry &geom,
                                         uint32_t availableCores)
 {
-    if (MatchesCaseGeometry<1U>(geom)) return ApplyCasePlan<1U>(context, availableCores);
-    if (MatchesCaseGeometry<2U>(geom)) return ApplyCasePlan<2U>(context, availableCores);
-    if (MatchesCaseGeometry<3U>(geom)) return ApplyCasePlan<3U>(context, availableCores);
-    if (MatchesCaseGeometry<4U>(geom)) return ApplyCasePlan<4U>(context, availableCores);
-    if (MatchesCaseGeometry<5U>(geom)) return ApplyCasePlan<5U>(context, availableCores);
-    if (MatchesCaseGeometry<6U>(geom)) return ApplyCasePlan<6U>(context, availableCores);
-    return ge::GRAPH_FAILED;
+    LinalgEighTilingData plan = BuildEighTilingPlan(
+        geom.matrixOrder, geom.batchCount, 1U, 4U, geom.uplo);
+    const uint32_t maxSafeCores = ((geom.matrixOrder & 15U) == 0U) ? availableCores : 1U;
+    const uint32_t targetCores = (geom.batchCount < maxSafeCores) ? geom.batchCount : maxSafeCores;
+    plan.used_cores = (targetCores > 0U) ? targetCores : 1U;
+    return CommitTilingPlan(context, plan, 0U);
+}
+
+template <uint32_t CASE_A, uint32_t CASE_B>
+static ge::graphStatus DispatchScaleTier(gert::TilingContext *context,
+                                         const EighMatrixGeometry &geom,
+                                         uint32_t availableCores)
+{
+    if (MatchesPresetCase<CASE_A>(geom, availableCores)) {
+        return CommitTilingPlan(context, BuildCaseTilingPlan<CASE_A>(geom.uplo), CASE_A);
+    }
+    if (MatchesPresetCase<CASE_B>(geom, availableCores)) {
+        return CommitTilingPlan(context, BuildCaseTilingPlan<CASE_B>(geom.uplo), CASE_B);
+    }
+    return ApplyGeneralPlan(context, geom, availableCores);
+}
+
+static ge::graphStatus DispatchByMatrixScale(gert::TilingContext *context,
+                                             const EighMatrixGeometry &geom,
+                                             uint32_t availableCores)
+{
+    if (!geom.valid) {
+        return ge::GRAPH_FAILED;
+    }
+    if (geom.matrixOrder <= 16U) {
+        return DispatchScaleTier<1U, 4U>(context, geom, availableCores);
+    }
+    if (geom.matrixOrder <= 64U) {
+        return DispatchScaleTier<2U, 5U>(context, geom, availableCores);
+    }
+    return DispatchScaleTier<3U, 6U>(context, geom, availableCores);
 }
 
 static ge::graphStatus TilingFunc(gert::TilingContext *context)
 {
-    if (!ValidateInputAndUploAttr(context)) {
+    uint32_t uploVal = 0U;
+    if (!ValidateInputAndParseUplo(context, uploVal)) {
         return ge::GRAPH_FAILED;
     }
     const uint32_t availableCores = QueryAvailableVectorCores(context);
     const auto &originShape = context->GetInputShape(0)->GetOriginShape();
-    const EighMatrixGeometry geom = ExtractMatrixGeometry(originShape);
-    return DispatchCasePlan(context, geom, availableCores);
+    const EighMatrixGeometry geom = ExtractMatrixGeometry(originShape, uploVal);
+    return DispatchByMatrixScale(context, geom, availableCores);
 }
 
 } // namespace optiling
@@ -176,18 +218,9 @@ public:
 private:
     void InitPorts()
     {
-        this->Input("A")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT})
-            .Format({ge::FORMAT_ND});
-        this->Output("eigenvalues")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT})
-            .Format({ge::FORMAT_ND});
-        this->Output("eigenvectors")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT})
-            .Format({ge::FORMAT_ND});
+        this->Input("A").ParamType(REQUIRED).DataType({ge::DT_FLOAT}).Format({ge::FORMAT_ND});
+        this->Output("eigenvalues").ParamType(REQUIRED).DataType({ge::DT_FLOAT}).Format({ge::FORMAT_ND});
+        this->Output("eigenvectors").ParamType(REQUIRED).DataType({ge::DT_FLOAT}).Format({ge::FORMAT_ND});
     }
 
     void InitAttrs()

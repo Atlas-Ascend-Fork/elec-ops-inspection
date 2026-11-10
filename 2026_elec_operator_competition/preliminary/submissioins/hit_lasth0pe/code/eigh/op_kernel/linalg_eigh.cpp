@@ -186,6 +186,7 @@ public:
     gm_val_=reinterpret_cast<__gm__ float*>(eigenvalues);
     gm_vec_=reinterpret_cast<__gm__ float*>(eigenvectors);
     gm_ws_=reinterpret_cast<__gm__ float*>(tiling);
+    uplo_=Plan().uplo;
     pipe_.InitBuffer(ub_buf_,EighHostPlan<CASE_KEY>::value.ub_floats*sizeof(float));
   }
   __aicore__ inline void Process() {
@@ -198,6 +199,8 @@ public:
     } else if constexpr (EighCase<CASE_KEY>::Solver==3u) {
       const __gm__ EighCorePlan &cp=Plan().cores[AscendC::GetBlockIdx()];
       SolveLargeCoopStedc(gm_A_+cp.a_offset,gm_val_+cp.val_offset,gm_vec_+cp.a_offset,nullptr,ub_all,cp.p,EighCase<CASE_KEY>::P,true);
+    } else {
+      SolveGeneralFallback(gm_A_,gm_val_,gm_vec_);
     }
   }
 
@@ -220,6 +223,7 @@ private:
   #include "eigh_large_stedc.h"
   #include "eigh_large_stedc_b.h"
   #include "eigh_large_stedc_c.h"
+  #include "eigh_general_fallback.h"
 
 private:
   AscendC::TPipe pipe_;
@@ -227,7 +231,7 @@ private:
 
   static constexpr uint32_t n_=EighCase<CASE_KEY>::N;
   static constexpr uint32_t total_batch_=EighCase<CASE_KEY>::B;
-  static constexpr uint32_t uplo_=EighCase<CASE_KEY>::U;
+  uint32_t uplo_{0u};
 
   __gm__ float* gm_A_{nullptr};
   __gm__ float* gm_val_{nullptr};
