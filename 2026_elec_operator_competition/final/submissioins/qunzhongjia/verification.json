@@ -1,0 +1,51 @@
+{
+  "submission_id": 1347504,
+  "status": "Pass",
+  "submitted_at": "2026-11-15T15:14:35.286000+08:00",
+  "public_case_times_us": [
+    20.333333333333332,
+    20.473333333333333,
+    23.746666666666666,
+    25.413333333333334,
+    3.95,
+    21.243333333333332,
+    25.05666666666667,
+    28.046833333333332
+  ],
+  "source_root": "code/FusedDisconnectorKeypointSoftArgmax",
+  "verification": "Compared local sources with the archived upload payload and archived OJ-returned source.",
+  "editable_files": [
+    {
+      "path": "op_host/fused_disconnector_keypoint_soft_argmax.cpp",
+      "sha256": "7c91518d190a6c2792f4e1c88cd580dd9b71c3db2ceb65dec5177b1fb660b57e",
+      "local_payload_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fused_disconnector_keypoint_soft_argmax_tiling.h",
+      "sha256": "f725b5d4bab77bb47ffa37c9759c7de5ccc506c317b88fcff4a10bb9dd726caf",
+      "local_payload_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fused_disconnector_keypoint_soft_argmax.cpp",
+      "sha256": "f1a9d186bb13e14f2a289b268970b2bfc9b4a3f0a67adcb3736be53d432d9440",
+      "local_payload_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/tiling_key_fused_disconnector_keypoint_soft_argmax.h",
+      "sha256": "93b5a85bdd525261e1222891bdda379753f830b0ed79d039f5973ffa879ab506",
+      "local_payload_oj_source_equal": true
+    }
+  ],
+  "project_file_sha256": {
+    "CMakeLists.txt": "4d80dfa56e57233720d4ad85e61e7219845153b586f04a9691372bd11f221b96",
+    "op_host/CMakeLists.txt": "819ea7ece6e174adb09d90a86287a955ed2284ff81a087132b2584edc25d1885",
+    "op_host/fused_disconnector_keypoint_soft_argmax.cpp": "7c91518d190a6c2792f4e1c88cd580dd9b71c3db2ceb65dec5177b1fb660b57e",
+    "op_kernel/CMakeLists.txt": "82aad880f308a3aa660d7035fb6a403de3770e7bd79e858e2e25c7cbe319aa0c",
+    "op_kernel/fused_disconnector_keypoint_soft_argmax.cpp": "f1a9d186bb13e14f2a289b268970b2bfc9b4a3f0a67adcb3736be53d432d9440",
+    "op_kernel/fused_disconnector_keypoint_soft_argmax_tiling.h": "f725b5d4bab77bb47ffa37c9759c7de5ccc506c317b88fcff4a10bb9dd726caf",
+    "op_kernel/tiling_key_fused_disconnector_keypoint_soft_argmax.h": "93b5a85bdd525261e1222891bdda379753f830b0ed79d039f5973ffa879ab506",
+    "README.md": "578d4892898556bb70488c563435fa8a8b8a0e20b052da7af330232553acec5b"
+  },
+  "recompiled_for_publication": false,
+  "npu_retested_for_publication": false
+}
