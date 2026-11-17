@@ -1,0 +1,102 @@
+{
+  "submission_id": 1348245,
+  "status": "Pass",
+  "valid": true,
+  "submitted_at": "2026-11-15T15:46:38.085000+08:00",
+  "official_receipt": "https://cannjudge.cn/submission/6af9635e6bd0f9be37df08c6",
+  "public_case_times_us": [
+    17.57,
+    17.683333333333334,
+    24.30666666666667,
+    25.893333333333334,
+    5.733333333333333,
+    20.266666666666666,
+    23.493333333333332,
+    28.106833333333334
+  ],
+  "public_case_precision_ratios": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "hidden_case_count": 7,
+  "source_root": "code/FusedDisconnectorKeypointSoftArgmax",
+  "verification": "All 12 archived project files are byte-identical to the current local project and the OJ-downloaded source. All 8 editable files also match the archived dry-run and official receipt SHA-256 values.",
+  "editable_files": [
+    {
+      "path": "op_host/fused_disconnector_keypoint_soft_argmax.cpp",
+      "sha256": "3f414e54d92d5bfaab864014de94238d9827fdb2311be74ea3c1d69bbd825bd8",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fdk_decode_common.h",
+      "sha256": "c9e67652ddf26a122233e4097c86a5de996d36febeeb47b0eced031a9aa2d0b6",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fdk_single_entry.h",
+      "sha256": "6c01f4b0862a3e6596c39b872a57fd626bcc679a5c2646ba5282fa6078b1e5dc",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fdk_vector_body.h",
+      "sha256": "e6c0a76075b7e0a65129b80f627bce2f957fdc50f5f6f57f24cd0406a392426e",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fused_disconnector_keypoint_soft_argmax_tiling.h",
+      "sha256": "0cafd18b892f465d0811f2388ab4afcd809517ac902fc53871f4581adaf3b297",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/fused_disconnector_keypoint_soft_argmax.cpp",
+      "sha256": "2711ab13091d11aeda1944c53581f930d82a7baf9f51e9c4240f1ff27e0744ec",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/launch_plan.h",
+      "sha256": "df1b192a3b8e70b28a0a55aadf3cfed492972d2b44d0137943e3ca280d7bfb09",
+      "local_dry_run_oj_source_equal": true
+    },
+    {
+      "path": "op_kernel/tiling_key_fused_disconnector_keypoint_soft_argmax.h",
+      "sha256": "29c8bb87390e47935985a7a8b07812c5788bc6c4f5cbbca5ac73db854b874861",
+      "local_dry_run_oj_source_equal": true
+    }
+  ],
+  "project_file_sha256": {
+    "CMakeLists.txt": "4d80dfa56e57233720d4ad85e61e7219845153b586f04a9691372bd11f221b96",
+    "README.md": "578d4892898556bb70488c563435fa8a8b8a0e20b052da7af330232553acec5b",
+    "op_host/CMakeLists.txt": "819ea7ece6e174adb09d90a86287a955ed2284ff81a087132b2584edc25d1885",
+    "op_host/fused_disconnector_keypoint_soft_argmax.cpp": "3f414e54d92d5bfaab864014de94238d9827fdb2311be74ea3c1d69bbd825bd8",
+    "op_kernel/CMakeLists.txt": "82aad880f308a3aa660d7035fb6a403de3770e7bd79e858e2e25c7cbe319aa0c",
+    "op_kernel/fdk_decode_common.h": "c9e67652ddf26a122233e4097c86a5de996d36febeeb47b0eced031a9aa2d0b6",
+    "op_kernel/fdk_single_entry.h": "6c01f4b0862a3e6596c39b872a57fd626bcc679a5c2646ba5282fa6078b1e5dc",
+    "op_kernel/fdk_vector_body.h": "e6c0a76075b7e0a65129b80f627bce2f957fdc50f5f6f57f24cd0406a392426e",
+    "op_kernel/fused_disconnector_keypoint_soft_argmax.cpp": "2711ab13091d11aeda1944c53581f930d82a7baf9f51e9c4240f1ff27e0744ec",
+    "op_kernel/fused_disconnector_keypoint_soft_argmax_tiling.h": "0cafd18b892f465d0811f2388ab4afcd809517ac902fc53871f4581adaf3b297",
+    "op_kernel/launch_plan.h": "df1b192a3b8e70b28a0a55aadf3cfed492972d2b44d0137943e3ca280d7bfb09",
+    "op_kernel/tiling_key_fused_disconnector_keypoint_soft_argmax.h": "29c8bb87390e47935985a7a8b07812c5788bc6c4f5cbbca5ac73db854b874861"
+  },
+  "historical_npu_validation": {
+    "hardware": "Ascend 910B3",
+    "cann": "9.0.0",
+    "formal_acl_nn_proxy": {
+      "passed": 15,
+      "total": 15
+    },
+    "synthetic_correctness_audit": {
+      "passed": 12,
+      "total": 12
+    },
+    "atol": 0.0001,
+    "rtol": 0.0001
+  },
+  "recompiled_for_publication": false,
+  "npu_retested_for_publication": false
+}

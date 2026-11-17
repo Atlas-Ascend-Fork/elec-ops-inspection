@@ -1,0 +1,18 @@
+#pragma once
+
+#include "ascendc/host_api/tiling/template_argument.h"
+
+ASCENDC_TPL_ARGS_DECL(FusedDisconnectorKeypointSoftArgmax,
+    ASCENDC_TPL_UINT_DECL(PATH, 1, ASCENDC_TPL_UI_LIST, 0, 1),
+);
+
+ASCENDC_TPL_SEL(
+    ASCENDC_TPL_ARGS_SEL(
+        ASCENDC_TPL_UINT_SEL(PATH, ASCENDC_TPL_UI_LIST, 0),
+        ASCENDC_TPL_KERNEL_TYPE_SEL(ASCENDC_TPL_AIV_ONLY),
+    ),
+    ASCENDC_TPL_ARGS_SEL(
+        ASCENDC_TPL_UINT_SEL(PATH, ASCENDC_TPL_UI_LIST, 1),
+        ASCENDC_TPL_KERNEL_TYPE_SEL(ASCENDC_TPL_MIX_AIV_1_0),
+    ),
+);
