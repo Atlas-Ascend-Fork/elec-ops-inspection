@@ -47,5 +47,53 @@
     "README.md": "578d4892898556bb70488c563435fa8a8b8a0e20b052da7af330232553acec5b"
   },
   "recompiled_for_publication": false,
-  "npu_retested_for_publication": false
+  "npu_retested_for_publication": false,
+  "maintenance_20261118": {
+    "scope": "License/formatting fixes and inline decomposition of case5 into two headers to meet source/method size limits. Explicit zero-denominator guard; header name matches the class.",
+    "original_hashes_note": "The editable_files and project_file_sha256 fields describe the original PR134/OJ archive.",
+    "cpp_tokens_and_preprocessor_directives_unchanged": false,
+    "current_source_sha256": {
+      "op_kernel/tiling_key_fused_disconnector_keypoint_soft_argmax.h": "599d0c841cf7670bd9969254700c9a5bebee0c8e44f6f407ca298376c8bf3f46",
+      "op_kernel/fused_disconnector_keypoint_soft_argmax_tiling.h": "8cfe5039015071447399e555c83e5301b0146015d69350b4c189dfa26bde9ea1",
+      "op_host/fused_disconnector_keypoint_soft_argmax.cpp": "de29fd3b21e0cd4024c34d0b9c8bbe4d95fcdb65ffaebd1d27d3ab96f866dfb3",
+      "op_kernel/fused_disconnector_keypoint_soft_argmax.cpp": "bf95c31b57146a3e523b194cd53912c9d05210b2250f4fb3e15c3c444fa657e5",
+      "op_kernel/case5_steps.h": "9a4609f3f75b59afd07b3e1781212d67a33cb2cbc9ad8d680a9998e7214d0c8a",
+      "op_kernel/kernel_case5_single_core.h": "80596eaf77d4458a441f72cea6a160953b3c86d469d7d824634c603411662958"
+    },
+    "cann_recompiled": false,
+    "npu_retested": false,
+    "extraction_base_commit": "4ae891ec057835f644b308ce0c4d2a7a08f1478e",
+    "initial_four_helpers_expand_byte_identically_to_formatting_revision": true,
+    "process_split_base_commit": "fa9115b8165a96c6324f39e81e6d760d0c107c41",
+    "process_split_validation": {
+      "cpp_nbnc": 1757,
+      "function_nbnc": {
+        "AllocateDenseBuffers": 18,
+        "BindDenseTensors": 21,
+        "InitDenseCoordinates": 27,
+        "AccumulateDenseChannel": 27,
+        "AccumulateDenseHeatmap": 15,
+        "MergeDensePlanes": 26,
+        "DecodeDenseHeatmap": 30,
+        "RunDense": 15,
+        "Process": 29
+      },
+      "expanded_process_tokens_equal": true,
+      "zero_weight_fast_path_unchanged": true,
+      "buffer_member_layout_unchanged": true,
+      "other_kernel_branches_unchanged": true,
+      "cann_compiled": false,
+      "npu_tested": false,
+      "note": "Checks describe structural extraction before adding the explicit zero-denominator guard."
+    },
+    "zero_denominator_guard": {
+      "condition": "denom == 0.0f",
+      "fallback": 1.0,
+      "finite_stable_softmax_denominator_at_least_one": true,
+      "guard_removed_header_equals_previous_revision": true,
+      "decode_function_nbnc": 33,
+      "cann_compiled": false,
+      "npu_tested": false
+    }
+  }
 }

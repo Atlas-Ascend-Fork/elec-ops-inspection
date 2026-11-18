@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ * Copyright (c) 2026 黎何.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 #include <algorithm>
@@ -11,12 +27,12 @@ constexpr int64_t kFixedCin = 32;
 constexpr int64_t kFixedK = 4;
 constexpr int64_t kFixedKernel = 3;
 bool ValidateTensorShapes(const gert::Shape* featShape,
-const gert::Shape* weightShape,
-const gert::Shape* biasShape,
-uint32_t& B,
-uint32_t& C,
-uint32_t& H,
-uint32_t& W)
+    const gert::Shape* weightShape,
+    const gert::Shape* biasShape,
+    uint32_t& B,
+    uint32_t& C,
+    uint32_t& H,
+    uint32_t& W)
 {
 if (featShape == nullptr || weightShape == nullptr || biasShape == nullptr) {
 return false;
@@ -52,13 +68,13 @@ uint32_t CeilDiv(uint32_t a, uint32_t b)
 return (a + b - 1U) / b;
 }
 uint32_t SelectKernelPathAndStripes(uint32_t B,
-uint32_t C,
-uint32_t H,
-uint32_t W,
-uint32_t cores,
-uint32_t& stripesPerBatch,
-uint32_t& usedCores,
-size_t& userWsFloats)
+    uint32_t C,
+    uint32_t H,
+    uint32_t W,
+    uint32_t cores,
+    uint32_t& stripesPerBatch,
+    uint32_t& usedCores,
+    size_t& userWsFloats)
 {
 static const bool forceBaseline = []() {
 const char* env = std::getenv("KEYPOINT_FORCE_PATH0");
@@ -145,9 +161,9 @@ uint32_t C = 0;
 uint32_t H = 0;
 uint32_t W = 0;
 if (!ValidateTensorShapes(&featShape->GetStorageShape(),
-&weightShape->GetStorageShape(),
-&biasShape->GetStorageShape(),
-B, C, H, W)) {
+    &weightShape->GetStorageShape(),
+    &biasShape->GetStorageShape(),
+    B, C, H, W)) {
 return ge::GRAPH_FAILED;
 }
 const auto* d0 = context->GetInputDesc(0);
@@ -179,7 +195,7 @@ uint32_t stripesPerBatch = 1U;
 uint32_t usedCores = 1U;
 size_t userWsFloats = 0U;
 uint32_t pathId = SelectKernelPathAndStripes(
-B, C, H, W, cores, stripesPerBatch, usedCores, userWsFloats);
+    B, C, H, W, cores, stripesPerBatch, usedCores, userWsFloats);
 if (pathId == 4U && tau == 1.0f && stride == 4) {
 pathId = 19U;
 stripesPerBatch = 1U;

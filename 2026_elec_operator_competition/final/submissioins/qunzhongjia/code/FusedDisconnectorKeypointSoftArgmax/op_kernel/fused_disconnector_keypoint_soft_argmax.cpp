@@ -1,299 +1,24 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ * Copyright (c) 2026 黎何.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #define K_MAX_SHAPE_DIM 0
 #include "kernel_operator.h"
 #include "fused_disconnector_keypoint_soft_argmax_tiling.h"
 #include "tiling_key_fused_disconnector_keypoint_soft_argmax.h"
-namespace FusedKeypointBranches {
-class KernelCase5SingleCore {
-public:
-    static constexpr uint32_t B_TPL = 4;
-    static constexpr uint32_t H_TPL = 48;
-    static constexpr uint32_t W_TPL = 64;
-    static constexpr uint32_t HW_TPL = 3072;
-    static constexpr uint32_t X_BUF_ELEMS = 3136;
-    static constexpr uint32_t IN_BUF_ELEMS = 3136;
-    static constexpr uint32_t H_MINUS_1_W = 3008;
-    static constexpr uint8_t W_BLOCKS = 8;
-    static constexpr uint32_t TOTAL_FEAT_ELEMS = 393216;
-    static constexpr float STRIDE_F = 4.0f;
-    static constexpr float INV_TAU = 1.0f;
-    static constexpr uint64_t KP_PAIR_BITS = (static_cast<uint64_t>(0x42C00000ULL) << 32) | 0x43000000ULL;
-    __aicore__ inline KernelCase5SingleCore() {}
-    __aicore__ inline void Init(
-        GM_ADDR feat,
-        GM_ADDR weight,
-        GM_ADDR bias,
-        GM_ADDR keypoints,
-        GM_ADDR scores)
-    {
-        featGm.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(feat), TOTAL_FEAT_ELEMS);
-        weightGm.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(weight), 1152);
-        biasGm.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(bias), 4);
-        keypointsGm.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(keypoints), B_TPL * 8);
-        scoresGm.SetGlobalBuffer(reinterpret_cast<__gm__ float *>(scores), B_TPL * 4);
-        pipe.InitBuffer(inBuf, IN_BUF_ELEMS * sizeof(float));
-    }
-    __aicore__ inline void Process()
-    {
-        if (AscendC::GetBlockIdx() != 0U) {
-            return;
-        }
-        AscendC::LocalTensor<float> inLocal = inBuf.Get<float>();
-        AscendC::LocalTensor<float> wLocal = inLocal[0];
-        AscendC::LocalTensor<float> bLocal = inLocal[1152];
-        AscendC::LocalTensor<float> outKpLocal = inLocal[1160];
-        AscendC::LocalTensor<float> outScLocal = inLocal[1192];
-        AscendC::LocalTensor<float> absLocal = inLocal[1216];
-        AscendC::LocalTensor<float> reduceTmpLocal = inLocal[2368];
-        AscendC::LocalTensor<float> scalarLocal = inLocal[2496];
-        AscendC::DataCopy(wLocal, weightGm, 1152);
-        AscendC::DataCopyPad(bLocal, biasGm, AscendC::DataCopyExtParams{1, 4U * sizeof(float), 0, 0, 0}, AscendC::DataCopyPadExtParams<float>{false, 0, 0, 0.0f});
-        AscendC::LocalTensor<uint64_t> kpU64 = outKpLocal.ReinterpretCast<uint64_t>();
-        kpU64.SetValue(0, KP_PAIR_BITS);
-        kpU64.SetValue(1, KP_PAIR_BITS);
-        kpU64.SetValue(2, KP_PAIR_BITS);
-        kpU64.SetValue(3, KP_PAIR_BITS);
-        kpU64.SetValue(4, KP_PAIR_BITS);
-        kpU64.SetValue(5, KP_PAIR_BITS);
-        kpU64.SetValue(6, KP_PAIR_BITS);
-        kpU64.SetValue(7, KP_PAIR_BITS);
-        kpU64.SetValue(8, KP_PAIR_BITS);
-        kpU64.SetValue(9, KP_PAIR_BITS);
-        kpU64.SetValue(10, KP_PAIR_BITS);
-        kpU64.SetValue(11, KP_PAIR_BITS);
-        kpU64.SetValue(12, KP_PAIR_BITS);
-        kpU64.SetValue(13, KP_PAIR_BITS);
-        kpU64.SetValue(14, KP_PAIR_BITS);
-        kpU64.SetValue(15, KP_PAIR_BITS);
-        AscendC::PipeBarrier<PIPE_ALL>();
-        AscendC::Abs<float>(absLocal, wLocal, 1152);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::Add<float>(absLocal[0], absLocal[0], absLocal[512], 512);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::Add<float>(absLocal[0], absLocal[0], absLocal[1024], 128);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::Add<float>(absLocal[0], absLocal[0], absLocal[256], 256);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::Add<float>(absLocal[0], absLocal[0], absLocal[128], 128);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::Add<float>(absLocal[0], absLocal[0], absLocal[64], 64);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::ReduceMax<float>(scalarLocal, absLocal, reduceTmpLocal, 64, false);
-        AscendC::LocalTensor<uint64_t> scU64 = outScLocal.ReinterpretCast<uint64_t>();
-        AscendC::LocalTensor<uint64_t> bU64 = bLocal.ReinterpretCast<uint64_t>();
-        uint64_t b01 = bU64.GetValue(0);
-        uint64_t b23 = bU64.GetValue(1);
-        scU64.SetValue(0, b01);
-        scU64.SetValue(1, b23);
-        scU64.SetValue(2, b01);
-        scU64.SetValue(3, b23);
-        scU64.SetValue(4, b01);
-        scU64.SetValue(5, b23);
-        scU64.SetValue(6, b01);
-        scU64.SetValue(7, b23);
-        AscendC::PipeBarrier<PIPE_ALL>();
-        if (scalarLocal.GetValue(0) == 0.0f) {
-            AscendC::DataCopy(keypointsGm, outKpLocal, B_TPL * 8U);
-            AscendC::DataCopy(scoresGm, outScLocal, B_TPL * 4U);
-            return;
-        }
-        pipe.InitBuffer(wBuf, 1152 * sizeof(float));
-        pipe.InitBuffer(bBuf, 8 * sizeof(float));
-        pipe.InitBuffer(xBuf, X_BUF_ELEMS * sizeof(float));
-        pipe.InitBuffer(xBuf0, 3264 * sizeof(float));
-        pipe.InitBuffer(xBuf2, 3200 * sizeof(float));
-        pipe.InitBuffer(shiftBuf, 3072 * sizeof(float));
-        pipe.InitBuffer(uCoordBuf, W_TPL * sizeof(float));
-        pipe.InitBuffer(rowOff0Buf, HW_TPL * sizeof(uint32_t));
-        pipe.InitBuffer(rowOff2Buf, HW_TPL * sizeof(uint32_t));
-        pipe.InitBuffer(maskLeftBuf, 8 * sizeof(float));
-        pipe.InitBuffer(maskRightBuf, 8 * sizeof(float));
-        pipe.InitBuffer(reduceTmpBuf, 256 * sizeof(float));
-        pipe.InitBuffer(scalarBuf, 16 * sizeof(float));
-        pipe.InitBuffer(outKpBuf, 32 * sizeof(float));
-        pipe.InitBuffer(outScBuf, 16 * sizeof(float));
-        AscendC::LocalTensor<float> wFull = wBuf.Get<float>();
-        AscendC::LocalTensor<float> bFull = bBuf.Get<float>();
-        AscendC::LocalTensor<float> xLocal = xBuf.Get<float>();
-        AscendC::LocalTensor<float> xLocal0_base = xBuf0.Get<float>();
-        AscendC::LocalTensor<float> xLocal0 = xLocal0_base[8];
-        AscendC::LocalTensor<float> xLocal2 = xBuf2.Get<float>();
-        AscendC::LocalTensor<float> shiftLocal = shiftBuf.Get<float>();
-        AscendC::LocalTensor<float> uCoordLocal = uCoordBuf.Get<float>();
-        AscendC::LocalTensor<uint32_t> rowOff0Local = rowOff0Buf.Get<uint32_t>();
-        AscendC::LocalTensor<uint32_t> rowOff2Local = rowOff2Buf.Get<uint32_t>();
-        AscendC::LocalTensor<int32_t> off0I32 = rowOff0Local.ReinterpretCast<int32_t>();
-        AscendC::LocalTensor<int32_t> off2I32 = rowOff2Local.ReinterpretCast<int32_t>();
-        AscendC::LocalTensor<float> maskLeftLocal = maskLeftBuf.Get<float>();
-        AscendC::LocalTensor<float> maskRightLocal = maskRightBuf.Get<float>();
-        AscendC::LocalTensor<float> redTmp = reduceTmpBuf.Get<float>();
-        AscendC::LocalTensor<float> scTmp = scalarBuf.Get<float>();
-        AscendC::LocalTensor<float> kpOut = outKpBuf.Get<float>();
-        AscendC::LocalTensor<float> scOut = outScBuf.Get<float>();
-        AscendC::DataCopy(wFull, weightGm, 1152);
-        AscendC::DataCopyPad(bFull, biasGm, AscendC::DataCopyExtParams{1, 4U * sizeof(float), 0, 0, 0}, AscendC::DataCopyPadExtParams<float>{false, 0, 0, 0.0f});
-        for (uint32_t u = 0; u < 8; ++u) {
-            uCoordLocal.SetValue(u, static_cast<float>(static_cast<int32_t>(u)));
-            off2I32.SetValue(u, static_cast<int32_t>((u + 1U) * sizeof(float)));
-            maskLeftLocal.SetValue(u, (u == 0) ? 0.0f : 1.0f);
-            maskRightLocal.SetValue(u, (u == 7) ? 0.0f : 1.0f);
-        }
-        AscendC::PipeBarrier<PIPE_ALL>();
-        for (uint32_t step = 8; step < W_TPL; step <<= 1) {
-            AscendC::Adds<float>(uCoordLocal[step], uCoordLocal[0], static_cast<float>(static_cast<int32_t>(step)), static_cast<int32_t>(step));
-            AscendC::PipeBarrier<PIPE_V>();
-        }
-        for (uint32_t step = 8; step < HW_TPL; step <<= 1) {
-            uint32_t cnt = (step <= HW_TPL - step) ? step : (HW_TPL - step);
-            AscendC::Adds<int32_t>(off2I32[step], off2I32[0], static_cast<int32_t>(step * sizeof(float)), static_cast<int32_t>(cnt));
-            AscendC::PipeBarrier<PIPE_V>();
-        }
-        AscendC::Adds<int32_t>(off0I32, off2I32, 24, static_cast<int32_t>(HW_TPL));
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::BinaryRepeatParams maskRepParams{1, 1, 1, W_BLOCKS, W_BLOCKS, 0};
-        for (uint32_t bk = 0; bk < 4U * B_TPL; ++bk) {
-            uint32_t b = bk >> 2;
-            uint32_t k = bk & 3U;
-            AscendC::LocalTensor<float> wkLocal = wFull[k * 288];
-            float bVal = bFull.GetValue(k);
-            AscendC::Duplicate<float>(xLocal, bVal, static_cast<int32_t>(HW_TPL));
-            AscendC::Duplicate<float>(xLocal0_base, 0.0f, static_cast<int32_t>(HW_TPL + 8U));
-            AscendC::Duplicate<float>(xLocal2, 0.0f, static_cast<int32_t>(HW_TPL + 8U));
-            AscendC::PipeBarrier<PIPE_V>();
-            uint32_t baseGmOffset = b * 32 * HW_TPL;
-            for (uint32_t c = 0; c < 32; ++c) {
-                uint32_t gmOffset = baseGmOffset + c * HW_TPL;
-                uint32_t wBase = c * 9;
-                AscendC::DataCopy(shiftLocal, featGm[gmOffset], HW_TPL);
-                AscendC::PipeBarrier<PIPE_ALL>();
-                float w00 = wkLocal.GetValue(wBase + 0);
-                float w01 = wkLocal.GetValue(wBase + 1);
-                float w02 = wkLocal.GetValue(wBase + 2);
-                float w10 = wkLocal.GetValue(wBase + 3);
-                float w11 = wkLocal.GetValue(wBase + 4);
-                float w12 = wkLocal.GetValue(wBase + 5);
-                float w20 = wkLocal.GetValue(wBase + 6);
-                float w21 = wkLocal.GetValue(wBase + 7);
-                float w22 = wkLocal.GetValue(wBase + 8);
-                AscendC::Axpy<float, float>(xLocal0[W_TPL], shiftLocal[0], w00, static_cast<int32_t>(H_MINUS_1_W));
-                AscendC::Axpy<float, float>(xLocal[W_TPL], shiftLocal[0], w01, static_cast<int32_t>(H_MINUS_1_W));
-                AscendC::Axpy<float, float>(xLocal2[W_TPL], shiftLocal[0], w02, static_cast<int32_t>(H_MINUS_1_W));
-                AscendC::Axpy<float, float>(xLocal0[0], shiftLocal[0], w10, static_cast<int32_t>(HW_TPL));
-                AscendC::Axpy<float, float>(xLocal[0], shiftLocal[0], w11, static_cast<int32_t>(HW_TPL));
-                AscendC::Axpy<float, float>(xLocal2[0], shiftLocal[0], w12, static_cast<int32_t>(HW_TPL));
-                AscendC::Axpy<float, float>(xLocal0[0], shiftLocal[W_TPL], w20, static_cast<int32_t>(H_MINUS_1_W));
-                AscendC::Axpy<float, float>(xLocal[0], shiftLocal[W_TPL], w21, static_cast<int32_t>(H_MINUS_1_W));
-                AscendC::Axpy<float, float>(xLocal2[0], shiftLocal[W_TPL], w22, static_cast<int32_t>(H_MINUS_1_W));
-                AscendC::PipeBarrier<PIPE_ALL>();
-            }
-            AscendC::Mul<float>(
-                xLocal0[W_TPL - 8],
-                xLocal0[W_TPL - 8],
-                maskRightLocal,
-                static_cast<uint64_t>(8),
-                static_cast<uint8_t>(H_TPL),
-                maskRepParams);
-            AscendC::Mul<float>(
-                xLocal2[0],
-                xLocal2[0],
-                maskLeftLocal,
-                static_cast<uint64_t>(8),
-                static_cast<uint8_t>(H_TPL),
-                maskRepParams);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Gather(inLocal, xLocal0_base, rowOff0Local, 0U, HW_TPL);
-            AscendC::Gather(shiftLocal, xLocal2, rowOff2Local, 0U, HW_TPL);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Add<float>(xLocal, xLocal, inLocal, static_cast<int32_t>(HW_TPL));
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Add<float>(xLocal, xLocal, shiftLocal, static_cast<int32_t>(HW_TPL));
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::ReduceMax<float>(scTmp, xLocal, shiftLocal, static_cast<int32_t>(HW_TPL), false);
-            AscendC::PipeBarrier<PIPE_ALL>();
-            float maxX = scTmp.GetValue(0);
-            scOut.SetValue(bk, maxX);
-            AscendC::Adds<float>(shiftLocal, xLocal, -maxX, static_cast<int32_t>(HW_TPL));
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Muls<float>(shiftLocal, shiftLocal, INV_TAU, static_cast<int32_t>(HW_TPL));
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Exp<float>(shiftLocal, shiftLocal, static_cast<int32_t>(HW_TPL));
-            AscendC::PipeBarrier<PIPE_V>();
-            uint32_t remH = H_TPL;
-            uint32_t half0 = remH >> 1;
-            uint32_t odd0 = remH - (half0 << 1);
-            uint32_t stride0 = half0 + odd0;
-            uint32_t srcOff0 = stride0 * W_TPL;
-            int32_t halfCount0 = static_cast<int32_t>(half0 * W_TPL);
-            AscendC::Muls<float>(
-                xLocal[0],
-                shiftLocal[srcOff0],
-                static_cast<float>(static_cast<int32_t>(stride0)),
-                halfCount0);
-            AscendC::Add<float>(shiftLocal[0], shiftLocal[0], shiftLocal[srcOff0], halfCount0);
-            AscendC::PipeBarrier<PIPE_V>();
-            remH = stride0;
-            while (remH > 1) {
-                uint32_t half = remH >> 1;
-                uint32_t odd = remH - (half << 1);
-                uint32_t stride = half + odd;
-                uint32_t srcOff = stride * W_TPL;
-                int32_t halfCount = static_cast<int32_t>(half * W_TPL);
-                AscendC::Axpy<float, float>(
-                    xLocal[0],
-                    shiftLocal[srcOff],
-                    static_cast<float>(static_cast<int32_t>(stride)),
-                    halfCount);
-                AscendC::Add<float>(shiftLocal[0], shiftLocal[0], shiftLocal[srcOff], halfCount);
-                AscendC::PipeBarrier<PIPE_V>();
-                AscendC::Add<float>(xLocal[0], xLocal[0], xLocal[srcOff], halfCount);
-                AscendC::PipeBarrier<PIPE_V>();
-                remH = stride;
-            }
-            AscendC::ReduceSum<float, true>(scTmp, shiftLocal[0], redTmp, static_cast<int32_t>(W_TPL));
-            AscendC::PipeBarrier<PIPE_ALL>();
-            float denom = scTmp.GetValue(0);
-            AscendC::ReduceSum<float, true>(scTmp, xLocal[0], redTmp, static_cast<int32_t>(W_TPL));
-            AscendC::PipeBarrier<PIPE_ALL>();
-            float sumV = scTmp.GetValue(0);
-            AscendC::Mul<float>(shiftLocal[0], shiftLocal[0], uCoordLocal, static_cast<int32_t>(W_TPL));
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::ReduceSum<float, true>(scTmp, shiftLocal[0], redTmp, static_cast<int32_t>(W_TPL));
-            AscendC::PipeBarrier<PIPE_ALL>();
-            float sumU = scTmp.GetValue(0);
-            float xFeat = sumU / denom;
-            float yFeat = sumV / denom;
-            kpOut.SetValue(bk * 2, (xFeat + 0.5f) * STRIDE_F);
-            kpOut.SetValue(bk * 2 + 1, (yFeat + 0.5f) * STRIDE_F);
-            AscendC::PipeBarrier<PIPE_ALL>();
-        }
-        AscendC::DataCopy(keypointsGm, kpOut, B_TPL * 8U);
-        AscendC::DataCopy(scoresGm, scOut, B_TPL * 4U);
-    }
-private:
-    AscendC::TPipe pipe;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> inBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> wBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> bBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> xBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> xBuf0;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> xBuf2;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> shiftBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> uCoordBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> rowOff0Buf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> rowOff2Buf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> maskLeftBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> maskRightBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> reduceTmpBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> scalarBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> outKpBuf;
-    AscendC::TBuf<AscendC::TPosition::VECCALC> outScBuf;
-    AscendC::GlobalTensor<float> featGm;
-    AscendC::GlobalTensor<float> weightGm;
-    AscendC::GlobalTensor<float> biasGm;
-    AscendC::GlobalTensor<float> keypointsGm;
-    AscendC::GlobalTensor<float> scoresGm;
-};
-}
-
+#include "kernel_case5_single_core.h"
 namespace fdksa {
 using namespace AscendC;
 constexpr uint32_t FIXED_CIN = 32U;
@@ -310,9 +35,9 @@ SetFlag<E>(EVENT_ID0);
 WaitFlag<E>(EVENT_ID0);
 }
 __aicore__ inline DataCopyExtParams MakeCopyExt(uint32_t blockCount,
-uint32_t blockLen,
-uint32_t srcStride = 0U,
-uint32_t dstStride = 0U)
+    uint32_t blockLen,
+    uint32_t srcStride = 0U,
+    uint32_t dstStride = 0U)
 {
 DataCopyExtParams p{};
 p.blockCount = static_cast<uint16_t>(blockCount);
@@ -385,11 +110,11 @@ LocalTensor<float> srcRow = curCh[dh * STATIC_W];
 const uint32_t dOff = dh * 3U;
 const uint32_t dhPlaneBase = dh * 3U * PLANE_STRIDE;
 Axpy<float, float, false>(
-dst9[dhPlaneBase + 0U * PLANE_STRIDE], srcRow, weights.GetValue(wBase + dOff + 0U), MASK_PLACEHOLDER, CONV_R, rep);
+    dst9[dhPlaneBase + 0U * PLANE_STRIDE], srcRow, weights.GetValue(wBase + dOff + 0U), MASK_PLACEHOLDER, CONV_R, rep);
 Axpy<float, float, false>(
-dst9[dhPlaneBase + 1U * PLANE_STRIDE], srcRow, weights.GetValue(wBase + dOff + 1U), MASK_PLACEHOLDER, CONV_R, rep);
+    dst9[dhPlaneBase + 1U * PLANE_STRIDE], srcRow, weights.GetValue(wBase + dOff + 1U), MASK_PLACEHOLDER, CONV_R, rep);
 Axpy<float, float, false>(
-dst9[dhPlaneBase + 2U * PLANE_STRIDE], srcRow, weights.GetValue(wBase + dOff + 2U), MASK_PLACEHOLDER, CONV_R, rep);
+    dst9[dhPlaneBase + 2U * PLANE_STRIDE], srcRow, weights.GetValue(wBase + dOff + 2U), MASK_PLACEHOLDER, CONV_R, rep);
 }
 }
 __aicore__ inline void Run(GM_ADDR featAddr,
@@ -471,8 +196,8 @@ DataCopy(inBlock0[ubRowOff], featGm_[batchFeatBase], mte2Params);
 SetFlag<HardEvent::MTE2_V>(EVENT_ID0);
 if constexpr (!PRELOAD_ALL) {
 DataCopy(inBlock1[ubRowOff],
-featGm_[batchFeatBase + static_cast<uint64_t>(CH_PER_BLOCK) * HW_STRIDE],
-mte2Params);
+    featGm_[batchFeatBase + static_cast<uint64_t>(CH_PER_BLOCK) * HW_STRIDE],
+    mte2Params);
 SetFlag<HardEvent::MTE2_V>(EVENT_ID1);
 }
 if (sIdx == 0U) {
@@ -528,8 +253,8 @@ if (blk + 2U < NUM_BLOCKS) {
 SetFlag<HardEvent::V_MTE2>(evCur);
 WaitFlag<HardEvent::V_MTE2>(evCur);
 DataCopy(curBlock[ubRowOff],
-featGm_[batchFeatBase + static_cast<uint64_t>((blk + 2U) * CH_PER_BLOCK) * HW_STRIDE],
-mte2Params);
+    featGm_[batchFeatBase + static_cast<uint64_t>((blk + 2U) * CH_PER_BLOCK) * HW_STRIDE],
+    mte2Params);
 SetFlag<HardEvent::MTE2_V>(evCur);
 }
 }
@@ -876,8 +601,8 @@ mte2Params.dstStride = static_cast<uint16_t>((rChStride - gmCopyElems) >> 3U);
 DataCopy(inBlock0[ubRowOff], featGm_[batchFeatBase], mte2Params);
 SetFlag<HardEvent::MTE2_V>(EVENT_ID0);
 DataCopy(inBlock1[ubRowOff],
-featGm_[batchFeatBase + static_cast<uint64_t>(chPerBlock) * hwStride],
-mte2Params);
+    featGm_[batchFeatBase + static_cast<uint64_t>(chPerBlock) * hwStride],
+    mte2Params);
 SetFlag<HardEvent::MTE2_V>(EVENT_ID1);
 if (sIdx == 0U) {
 for (uint32_t dc = 0; dc < 2U * chPerBlock; ++dc) {
@@ -893,16 +618,16 @@ Duplicate(inAll[dc * rChStride + (hLen + 1U) * wAligned], 0.0f, wAligned);
 padCopyParams = MakeCopyExt(1U, rawCopyFloats * static_cast<uint32_t>(sizeof(float)));
 for (uint32_t dc = 0; dc < chPerBlock; ++dc) {
 DataCopyPad(inBlock0[dc * rChStride],
-featGm_[batchFeatBase + static_cast<uint64_t>(dc) * hwStride],
-padCopyParams,
-MakeNoPad());
+    featGm_[batchFeatBase + static_cast<uint64_t>(dc) * hwStride],
+    padCopyParams,
+    MakeNoPad());
 }
 SetFlag<HardEvent::MTE2_V>(EVENT_ID0);
 for (uint32_t dc = 0; dc < chPerBlock; ++dc) {
 DataCopyPad(inBlock1[dc * rChStride],
-featGm_[batchFeatBase + static_cast<uint64_t>(chPerBlock + dc) * hwStride],
-padCopyParams,
-MakeNoPad());
+    featGm_[batchFeatBase + static_cast<uint64_t>(chPerBlock + dc) * hwStride],
+    padCopyParams,
+    MakeNoPad());
 }
 SetFlag<HardEvent::MTE2_V>(EVENT_ID1);
 }
@@ -942,12 +667,12 @@ WaitFlag<HardEvent::MTE2_V>(evCur);
 if constexpr (IS_ALIGNED_W) {
 for (uint32_t dc = 0; dc < chPerBlock; ++dc) {
 AccumulateChannel9(
-xConv9, curBlock[dc * rChStride], kWPtr, blk * chPerBlock + dc, wAligned, stripeElems);
+    xConv9, curBlock[dc * rChStride], kWPtr, blk * chPerBlock + dc, wAligned, stripeElems);
 }
 } else {
 for (uint32_t dc = 0; dc < chPerBlock; ++dc) {
 AccumulateChannel9Raw1D(
-xConv9, curBlock[dc * rChStride], kWPtr, blk * chPerBlock + dc, rawRCnt);
+    xConv9, curBlock[dc * rChStride], kWPtr, blk * chPerBlock + dc, rawRCnt);
 }
 }
 if (blk + 2U < numBlocks) {
@@ -959,9 +684,9 @@ DataCopy(curBlock[ubRowOff], featGm_[nextGmBase], mte2Params);
 } else {
 for (uint32_t dc = 0; dc < chPerBlock; ++dc) {
 DataCopyPad(curBlock[dc * rChStride],
-featGm_[nextGmBase + static_cast<uint64_t>(dc) * hwStride],
-padCopyParams,
-MakeNoPad());
+    featGm_[nextGmBase + static_cast<uint64_t>(dc) * hwStride],
+    padCopyParams,
+    MakeNoPad());
 }
 }
 SetFlag<HardEvent::MTE2_V>(evCur);
@@ -1372,9 +1097,9 @@ padCopyParams = MakeCopyExt(static_cast<uint16_t>(gmRows), W * static_cast<uint3
 #pragma unroll
 for (uint32_t dc = 0; dc < 4U; ++dc) {
 DataCopyPad(inBlock0[dc * rChStride + ubRowOff],
-featGm_[batchBase + static_cast<uint64_t>(dc) * hwStride],
-padCopyParams,
-MakeNoPad());
+    featGm_[batchBase + static_cast<uint64_t>(dc) * hwStride],
+    padCopyParams,
+    MakeNoPad());
 }
 }
 SetFlag<HardEvent::MTE2_V>(EVENT_ID0);
@@ -1396,9 +1121,9 @@ DataCopy(nextBlock[ubRowOff], featGm_[nextGmBase], mte2Params);
 #pragma unroll
 for (uint32_t dc = 0; dc < 4U; ++dc) {
 DataCopyPad(nextBlock[dc * rChStride + ubRowOff],
-featGm_[nextGmBase + static_cast<uint64_t>(dc) * hwStride],
-padCopyParams,
-MakeNoPad());
+    featGm_[nextGmBase + static_cast<uint64_t>(dc) * hwStride],
+    padCopyParams,
+    MakeNoPad());
 }
 }
 SetFlag<HardEvent::MTE2_V>(evNext);
@@ -1642,9 +1367,9 @@ padP.leftPadding = (hasLeft == 0U) ? 1 : 0;
 padP.rightPadding = 0;
 padP.paddingValue = 0.0f;
 DataCopyPad(fRows[dh * ROW_STRIDE],
-featGm_[gmOff],
-MakeCopyExt(1U, copyCols * sizeof(float)),
-padP);
+    featGm_[gmOff],
+    MakeCopyExt(1U, copyCols * sizeof(float)),
+    padP);
 }
 }
 Fence<HardEvent::MTE2_V>();
@@ -1755,8 +1480,8 @@ wsLocal.SetValue(16U + k, sGlob[k] + WVal(biasPtr, k));
 Fence<HardEvent::S_MTE3>();
 DataCopy(kpGm_[static_cast<uint64_t>(bIdx) * 8U], wsLocal[0], 8U);
 DataCopyPad(scGm_[static_cast<uint64_t>(bIdx) * 4U],
-wsLocal[16],
-MakeCopyExt(1U, FIXED_K * sizeof(float)));
+    wsLocal[16],
+    MakeCopyExt(1U, FIXED_K * sizeof(float)));
 Fence<HardEvent::MTE3_S>();
 }
 }
@@ -1861,9 +1586,9 @@ const uint64_t gmOff =
 (static_cast<uint64_t>(bIdx) * FIXED_CIN + c) * hwStride +
 static_cast<uint64_t>(gv) * W;
 DataCopyPad(fRows[dh * ROW_STRIDE],
-featGm_[gmOff],
-MakeCopyExt(1U, W * sizeof(float)),
-MakeNoPad());
+    featGm_[gmOff],
+    MakeCopyExt(1U, W * sizeof(float)),
+    MakeNoPad());
 }
 }
 Fence<HardEvent::MTE2_V>();
